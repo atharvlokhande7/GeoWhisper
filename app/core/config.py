@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
+
+    # Phase 2 Flags
+    USE_REAL_POIS: bool = True
+    AI_PROVIDER: str = "mock" # mock, rule_based, llm
+    OSM_API_URL: str = "https://overpass-api.de/api/interpreter"
     
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
