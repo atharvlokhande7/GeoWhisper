@@ -1,20 +1,16 @@
-import random
+from typing import List, Dict, Any
+from app.services.ai.mock import UnifiedAIProvider
+# from app.services.ai.base import AIProvider
 
 class AIService:
-    @staticmethod
-    async def generate_insight(lat: float, lon: float, movement_type: str, pois: list):
-        # Mock LLM generation
-        
-        poi_names = ", ".join([p['name'] for p in pois])
-        templates = [
-            f"You are currently {movement_type} near {poi_names}. It's a great day for exploration!",
-            f"Note the {poi_names} nearby. As you are {movement_type}, take a moment to look around.",
-            f"Detected {movement_type}. {poi_names} is close by."
-        ]
-        
-        text = random.choice(templates)
-        
-        return {
-            "text": text,
-            "audio_friendly": text  # In real app, might strip abbreviations
-        }
+    def __init__(self):
+        self.provider = UnifiedAIProvider()
+
+    async def generate_insight(
+        self, 
+        lat: float, 
+        lon: float, 
+        movement_type: str, 
+        pois: List[Dict[str, Any]]
+    ) -> Dict[str, str]:
+        return await self.provider.generate_insight(lat, lon, movement_type, pois)
