@@ -1,3 +1,5 @@
+import os
+from typing import List, Union, Optional
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
@@ -19,6 +21,10 @@ class Settings(BaseSettings):
     USE_REAL_POIS: bool = True
     AI_PROVIDER: str = "mock" # mock, rule_based, llm
     OSM_API_URL: str = "https://overpass-api.de/api/interpreter"
+    
+    # AI Config
+    OPENAI_API_KEY: Optional[str] = None
+    AI_TIMEOUT: int = 3 # seconds
     
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:

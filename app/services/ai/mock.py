@@ -1,7 +1,9 @@
 from typing import List, Dict, Any
 import random
+import httpx
 from datetime import datetime
 from app.core.config import settings
+from app.services.ai.prompt_templates import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE
 # from app.services.ai.base import AIProvider
 
 class UnifiedAIProvider:
@@ -13,10 +15,65 @@ class UnifiedAIProvider:
         pois: List[Dict[str, Any]]
     ) -> Dict[str, str]:
         
-        if settings.AI_PROVIDER == "rule_based":
+        provider = settings.AI_PROVIDER
+        
+        if provider == "llm":
+            try:
+                # Circuit Breaker / Fallback Logic
+                return await self._generate_llm(lat, lon, movement_type, pois)
+            except Exception as e:
+                print(f"ERROR: LLM Provider failed: {e}. Falling back to Rule-Based.", flush=True)
+                # Fallback to rule_based
+                return self._generate_rule_based(lat, lon, movement_type, pois)
+        elif provider == "rule_based":
             return self._generate_rule_based(lat, lon, movement_type, pois)
         else:
             return self._generate_mock(lat, lon, movement_type, pois)
+
+    async def _generate_llm(self, lat, lon, movement_type, pois):
+        if not settings.OPENAI_API_KEY:
+            raise ValueError("OPENAI_API_KEY is not set")
+        
+        # Prepare Context
+        poi_list_str = ", ".join([f"{p['name']} ({p.get('category', 'unknown')})" for p in pois[:5]])
+        if not poi_list_str:
+            poi_list_str = "None detected"
+
+        hour = datetime.now().hour
+        time_of_day = "day" # Simplify for now or reuse logic
+
+        prompt = USER_PROMPT_TEMPLATE.format(
+            time_of_day=hour,
+            movement_type=movement_type,
+            poi_list=poi_list_str
+        )
+
+        async with httpx.AsyncClient(timeout=settings.AI_TIMEOUT) as client:
+            response = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "gpt-3.5-turbo",
+                    "messages": [
+                        {"role": "system", "content": SYSTEM_PROMPT.format(movement_type=movement_type, speed="N/A")},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "max_tokens": 60,
+                    "temperature": 0.3
+                }
+            )
+            response.raise_for_status()
+            data = response.json()
+            content = data['choices'][0]['message']['content'].strip()
+            
+            return {
+                "text": content,
+                "audio_friendly": content,
+                "provider": "llm"
+            }
 
     def _generate_mock(self, lat, lon, movement_type, pois):
         poi_names = ", ".join([p['name'] for p in pois[:3]])

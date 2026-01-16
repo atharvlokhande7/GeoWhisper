@@ -26,7 +26,7 @@ services:
     environment:
       POSTGRES_SERVER: db
       REDIS_HOST: redis
-      AI_PROVIDER: rule_based
+      AI_PROVIDER: llm
     volumes:
       - .:/app
     depends_on:

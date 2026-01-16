@@ -6,44 +6,62 @@ from app.services.location_service import LocationService
 from app.services.poi_service import POIService
 from app.services.ai_service import AIService
 from app.core.database import get_db
+import traceback
 
 router = APIRouter()
 
-@router.post("/location", response_model=InsightResponse)
+@router.post("", response_model=InsightResponse)
 async def update_location(
-    loc: LocationUpdate,
+    location_data: LocationUpdate,
     db: AsyncSession = Depends(get_db)
 ):
-    loc_service = LocationService(db)
-    poi_service = POIService(db)
-    ai_service = AIService()
+    try:
+        # Manual Instantiation
+        location_service = LocationService(db)
+        poi_service = POIService(db)
+        ai_service = AIService()
 
-    # 1. Process Location
-    significant, location_obj = await loc_service.update_location(
-        loc.user_id, loc.latitude, loc.longitude, loc.speed
-    )
+        # 1. Save Location
+        significant, location = await location_service.update_location(
+            location_data.user_id,
+            location_data.latitude,
+            location_data.longitude,
+            location_data.speed
+        )
+        
+        # 2. Key/Significant Movement Check
+        is_significant = significant
+        
+        if not location:
+             # Handle logic if needed
+             pass
+        
+        lat = location.latitude if location else location_data.latitude
+        lon = location.longitude if location else location_data.longitude
+        movement_type = location.movement_type if location else "stationary"
 
-    if not significant:
+        # 3. Fetch POIs
+        pois = await poi_service.fetch_nearby_pois(lat, lon)
+
+        # 4. Generate Insight
+        insight = await ai_service.generate_insight(
+            lat, 
+            lon, 
+            movement_type,
+            pois
+        )
+        
         return InsightResponse(
             location_received=True,
-            significant_move=False
+            significant_move=is_significant,
+            movement_type=movement_type,
+            nearby_pois=[
+                POIData(name=p['name'], category=p['category'], lat=p['lat'], lon=p['lon']) 
+                for p in pois
+            ],
+            ai_insight=AIInsight(**insight)
         )
-
-    # 2. Fetch POIs
-    pois = await poi_service.fetch_nearby_pois(loc.latitude, loc.longitude)
-    
-    # 3. Generate Insight
-    insight_data = await ai_service.generate_insight(
-        loc.latitude, 
-        loc.longitude, 
-        location_obj.movement_type, 
-        pois
-    )
-
-    return InsightResponse(
-        location_received=True,
-        significant_move=True,
-        movement_type=location_obj.movement_type,
-        nearby_pois=[POIData(**p) for p in pois],
-        ai_insight=AIInsight(**insight_data)
-    )
+    except Exception as e:
+        # Proper logging implementation later
+        traceback.print_exc()
+        raise e
